@@ -1,152 +1,119 @@
 // Lucas Albano Olive Cruz - 2022036209
 
-// TODO: Pesquisar algoritmo de Tarjan
-
 #include <iostream>
 #include <string>
 #include <vector>
-#include <fstream>
-#include <sstream>
+#include <math.h>
 
-#include <queue>
 #include <algorithm>
+
+// Estrutura ponto
+struct Ponto{
+    float x,y;
+};
 
 // Estrutura que representa um vertice
 struct Vertice{
-    float x, y; 
+    Ponto cord; 
     int grau;
     std::vector<unsigned int> vizinhos;
 };
 
-// Le o grafo do arquivo e armazena em um vetor de vertices
-void leGrafo(const std::string& arquivo, std::vector<Vertice>& vertices){
-    std::ifstream file(arquivo);
-    if(!file.is_open()){
-        std::cout << "Erro ao abrir o arquivo" << std::endl;
-        exit(1);
+struct Aresta{
+    unsigned int origem, destino;
+    std::string cor;
+
+    Aresta(){
+        this->cor = "branco";
     }
-
-    std::string line;
-    if(std::getline(file, line)){
-        std::istringstream iss(line);
-        int nvertices, narestas;
-        if(iss >> nvertices >> narestas){
-            vertices.resize(nvertices);
-
-            for(int i=0; i < nvertices; i++){
-                file >> vertices[i].x >> vertices[i].y >> vertices[i].grau;
-
-                vertices[i].vizinhos.resize(vertices[i].grau);
-                for(int j=0; j < vertices[i].grau; j++){
-                    file >> vertices[i].vizinhos[j];
-                }
-            }
-        } else {
-            std::cout << "Erro ao ler a primeira linha do arquivo" << std::endl;
-            exit(1);
-        }
-    } else {
-        std::cout << "Arquivo está vazio" << std::endl;
-        exit(1);
-    }
-
-    file.close();
-}
+};
 
 // Extrai as arestas do grafo
-void extraiArestas(const std::vector<Vertice>& vertices, std::vector<std::pair<int, int>>& arestas){
-    for(unsigned int i=0; i < vertices.size(); i++){
+void extraiArestas(const std::vector<Vertice>& vertices, std::vector<Aresta>& arestas, int nvertices){
+    int w=0;
+    for(int i=0; i < nvertices; i++){
         for(int j=0; j < vertices[i].grau; j++){
-            if(i < vertices[i].vizinhos[j]){
-                arestas.push_back(std::make_pair(i + 1, vertices[i].vizinhos[j]));
-            }
+            arestas[w].origem = i + 1;
+            arestas[w].destino = vertices[i].vizinhos[j];
+            w++;
         }
     }
 }
 
-// Busca em largura - Constrói a árvore BFS
-void bfs(int inicio, const std::vector<std::pair<int, int>>& arestas, std::vector<int>& parente, std::vector<int>& nivel){
-    std::queue<int> fila;
-    fila.push(inicio);
-    nivel[inicio] = 0;
-    parente[inicio] = -1;
+// Distancia euclidiana de a para b.
+float Distancia(Ponto a, Ponto b){
+    float x = (a.x - b.x), y = (a.y - b.y);
+    return sqrt(x*x + y*y);
+}
 
-    while(!fila.empty()){
-        int u = fila.front();
-        fila.pop();
+// Coeficiente da reta que passa na origem e p.
+double Inclinacao(Ponto p){
+    return atan2(p.y, p.x);
+}
 
-        for(unsigned int i=0; i < arestas.size(); i++){
-            if(arestas[i].first == u){
-                int v = arestas[i].second;
-                if(nivel[v] == -1){
-                    nivel[v] = nivel[u] + 1;
-                    parente[v] = u;
-                    fila.push(v);
-                }
-            }
-        }
-    }
+// Coeficiente da reta orientada de p para q.
+double InclinacaoRelativa(Ponto p, Ponto q) {
+    return atan2(q.y - p.y, q.x - p.x);
+}
+
+// Determina se ao caminhar de a para b e depois de b para c estamos fazendo uma curva `a esquerda, `a direita, ou seguindo em frente.
+int TipoCurva(Ponto a, Ponto b, Ponto c){
+    float v = a.x*(b.y-c.y)+b.x*(c.y-a.y)+c.x*(a.y-b.y);
+    if (v == 0) return 0; // colinear
+    return (v > 0)? 1 : -1; // horario ou antihorario
+}
+
+bool Compara(Ponto base, Ponto a, Ponto b){
+    int orientation = TipoCurva(base, a, b);
+
+    // Desempate pelo mais distante
+    if(orientation == 0) 
+        return (Distancia(base, b) >= Distancia(base, a))? 0 : 1;
+
+    // True para sentido anti-horário
+    return (orientation == 1)? 1 : 0;
 }
 
 // Encontra as faces do grafo - Ainda não funciona
-void encontraFaces(const std::vector<Vertice>& vertices, const std::vector<std::pair<int, int>>& arestas){
-    int nvertices = vertices.size();
-    std::vector<int> nivel(nvertices, -1);
-    std::vector<int> parente(nvertices, -1);
-
-    for(int i=0; i < nvertices; i++){
-        if(nivel[i] == -1){
-            bfs(i, arestas, parente, nivel);
-        }
-    }
-
-    std::vector<std::vector<int>> faces;
-    for(int u = 0; u < nvertices; u++){
-        for(unsigned int v=0; v < arestas.size(); v++){
-            if(parente[arestas[v].first] != arestas[v].second && parente[arestas[v].second] != arestas[v].first){
-                std::vector<int> face;
-                int w = arestas[v].first;
-                while(w != -1){
-                    face.push_back(w);
-                    w = parente[w];
-                }
-                face.push_back(arestas[v].second);
-                faces.push_back(face);
-            }
-        }
-    }
-
-    std::cout << "Faces:" << std::endl;
-    for(unsigned int i=0; i < faces.size(); i++){
-        std::cout << "Face " << i + 1 << ": ";
-        for(unsigned int j=0; j < faces[i].size(); j++){
-            std::cout << faces[i][j] << " ";
-        }
-        std::cout << std::endl;
-    }
-}
+void encontraFaces(){}
 
 int main(int argc, char* argv[]){
-    // Verifica se o numero de argumentos é valido
-    if(argc != 2){
-        std::cout << "Uso: " << argv[0] << " <arquivo>" << std::endl;
-        return 1;
-    }
-
     // Vetor de vertices
     std::vector<Vertice> vertices;
     // Vetor de arestas
-    std::vector<std::pair<int, int>> arestas;
+    std::vector<Aresta> arestas;
+    // Numero de vértices e arestas
+    int nvertices, narestas;
 
-    // Le o arquivo
-    leGrafo(argv[1], vertices);
+    std::cin >> nvertices >> narestas;
+
+    // Considerar as duas direções de cada aresta
+    narestas = narestas*2;
+
+    vertices.resize(nvertices);
+    arestas.resize(narestas);
+
+    for(int i = 0; i < nvertices; i++){
+        std::cin >> vertices[i].cord.x >> vertices[i].cord.y >> vertices[i].grau;
+        vertices[i].vizinhos.resize(vertices[i].grau);
+        for(int j = 0; j < vertices[i].grau; j++){
+            std::cin >> vertices[i].vizinhos[j];
+        }
+    }
+
+    // Ordena os vizinhos de cada vértice
+    for(Vertice& vertice: vertices){
+        std::sort(vertice.vizinhos.begin(), vertice.vizinhos.end(), [&](int a, int b){
+            return Compara(vertice.cord, vertices[a-1].cord, vertices[b-1].cord);
+        });
+    }
 
     // Extrai as arestas
-    extraiArestas(vertices, arestas);
+    extraiArestas(vertices, arestas, nvertices);
 
     // Imprime os vertices
     for(unsigned int i=0; i < vertices.size(); i++){
-        std::cout << "Vertice " << i + 1 << ": (" << vertices[i].x << ", " << vertices[i].y << ")" << std::endl;
+        std::cout << "Vertice " << i + 1 << ": (" << vertices[i].cord.x << ", " << vertices[i].cord.y << ")" << std::endl;
         std::cout << "Grau: " << vertices[i].grau << std::endl;
         std::cout << "Vizinhos: ";
         for(int j=0; j < vertices[i].grau; j++){
@@ -156,12 +123,27 @@ int main(int argc, char* argv[]){
     }
 
     // Imprime as arestas
-    for(unsigned int i=0; i < arestas.size(); i++){
-        std::cout << "Aresta " << i << ": (" << arestas[i].first << ", " << arestas[i].second << ")" << std::endl;
+    for(int i=0; i < narestas; i++){
+        std::cout << "Aresta " << i << ": (" << arestas[i].origem << ", " << arestas[i].destino << ")" << std::endl;
     }
 
+    
     // Encontra as faces - Ainda não funciona
-    encontraFaces(vertices, arestas);
+    //encontraFaces();
 
     return 0;
 }
+
+/*
+Ideia para o algoritmo
+
+Considerar os dois caminhos de cada aresta (OK)
+
+Ordenar os vizinhos de cada vértice pelo angulo no sentido antihorário (OK)
+
+Andar por cada aresta em sentido antihorário e colorir ela ao cruzá-la 
+
+Ao voltar para o vértice original a face foi encontrada
+
+Fazer isso até colorir todas as arestas
+*/

@@ -21,6 +21,6 @@ clean:
 	rm -f ${BIN_DIR}/${TARGET}
 
 run: all
-	${BIN_DIR}/${TARGET} ${ARGS}
+	${BIN_DIR}/${TARGET} < ${ARGS}
 
 teste: clean run

@@ -11,34 +11,25 @@
 struct Ponto{
     float x,y;
 };
+struct Aresta{
+    unsigned int destino;
+    int cor;
+
+    Aresta(){
+        this->cor = 0;
+    }
+
+    bool visitado(){
+        return this->cor != 0;
+    }
+};
 
 // Estrutura que representa um vertice
 struct Vertice{
     Ponto cord; 
     int grau;
-    std::vector<unsigned int> vizinhos;
+    std::vector<Aresta> vizinhos;
 };
-
-struct Aresta{
-    unsigned int origem, destino;
-    std::string cor;
-
-    Aresta(){
-        this->cor = "branco";
-    }
-};
-
-// Extrai as arestas do grafo
-void extraiArestas(const std::vector<Vertice>& vertices, std::vector<Aresta>& arestas, int nvertices){
-    int w=0;
-    for(int i=0; i < nvertices; i++){
-        for(int j=0; j < vertices[i].grau; j++){
-            arestas[w].origem = i + 1;
-            arestas[w].destino = vertices[i].vizinhos[j];
-            w++;
-        }
-    }
-}
 
 // Distancia euclidiana de a para b.
 float Distancia(Ponto a, Ponto b){
@@ -52,64 +43,62 @@ double Inclinacao(Ponto p){
 }
 
 // Coeficiente da reta orientada de p para q.
-double InclinacaoRelativa(Ponto p, Ponto q) {
-    return atan2(q.y - p.y, q.x - p.x);
+double InclinacaoRelativa(Ponto central, Ponto vizinho) {
+    return atan2(vizinho.y - central.y, vizinho.x - central.x);
 }
 
 // Determina se ao caminhar de a para b e depois de b para c estamos fazendo uma curva `a esquerda, `a direita, ou seguindo em frente.
-int TipoCurva(Ponto a, Ponto b, Ponto c){
+float TipoCurva(Ponto a, Ponto b, Ponto c){
     float v = a.x*(b.y-c.y)+b.x*(c.y-a.y)+c.x*(a.y-b.y);
     if (v == 0) return 0; // colinear
     return (v > 0)? 1 : -1; // horario ou antihorario
 }
 
+// Compara dois pontos em relação a um ponto central
 bool Compara(Ponto base, Ponto a, Ponto b){
-    int orientation = TipoCurva(base, a, b);
-
-    // Desempate pelo mais distante
-    if(orientation == 0) 
-        return (Distancia(base, b) >= Distancia(base, a))? 0 : 1;
-
-    // True para sentido anti-horário
-    return (orientation == 1)? 1 : 0;
+    double angulo_a = InclinacaoRelativa(base, a);
+    double angulo_b = InclinacaoRelativa(base, b);
+    if(angulo_a == angulo_b){
+        return Distancia(base, a) > Distancia(base, b);
+    }
+    return angulo_a > angulo_b;
 }
 
-// Encontra as faces do grafo - Ainda não funciona
-void encontraFaces(){}
+// Visita todos as arestas e as pinta de preto (1) - DFS
+void encontraFaces(std::vector<std::vector<Aresta>>& arestas, int vertice, unsigned int anterior = 0){
+    for(unsigned int i=0; i < arestas[vertice-1].size(); i++){
+        if(!arestas[vertice-1][i].visitado() && arestas[vertice-1][i].destino != anterior){
+            arestas[vertice-1][i].cor = 1;
+            std::cout << "Aresta " << vertice << " -> " << arestas[vertice-1][i].destino << std::endl;
+            encontraFaces(arestas, arestas[vertice-1][i].destino, vertice);
+        }
+    }
+}
+
 
 int main(int argc, char* argv[]){
     // Vetor de vertices
     std::vector<Vertice> vertices;
-    // Vetor de arestas
-    std::vector<Aresta> arestas;
     // Numero de vértices e arestas
     int nvertices, narestas;
 
     std::cin >> nvertices >> narestas;
-
-    // Considerar as duas direções de cada aresta
-    narestas = narestas*2;
-
     vertices.resize(nvertices);
-    arestas.resize(narestas);
 
     for(int i = 0; i < nvertices; i++){
         std::cin >> vertices[i].cord.x >> vertices[i].cord.y >> vertices[i].grau;
         vertices[i].vizinhos.resize(vertices[i].grau);
         for(int j = 0; j < vertices[i].grau; j++){
-            std::cin >> vertices[i].vizinhos[j];
+            std::cin >> vertices[i].vizinhos[j].destino;
         }
     }
 
     // Ordena os vizinhos de cada vértice
     for(Vertice& vertice: vertices){
-        std::sort(vertice.vizinhos.begin(), vertice.vizinhos.end(), [&](int a, int b){
-            return Compara(vertice.cord, vertices[a-1].cord, vertices[b-1].cord);
+        std::sort(vertice.vizinhos.begin(), vertice.vizinhos.end(), [&](Aresta a, Aresta b){
+            return Compara(vertice.cord, vertices[a.destino-1].cord, vertices[b.destino-1].cord);
         });
     }
-
-    // Extrai as arestas
-    extraiArestas(vertices, arestas, nvertices);
 
     // Imprime os vertices
     for(unsigned int i=0; i < vertices.size(); i++){
@@ -117,19 +106,31 @@ int main(int argc, char* argv[]){
         std::cout << "Grau: " << vertices[i].grau << std::endl;
         std::cout << "Vizinhos: ";
         for(int j=0; j < vertices[i].grau; j++){
-            std::cout << vertices[i].vizinhos[j] << " ";
+            std::cout << vertices[i].vizinhos[j].destino << " ";
         }
         std::cout << std::endl << std::endl;
     }
 
-    // Imprime as arestas
-    for(int i=0; i < narestas; i++){
-        std::cout << "Aresta " << i << ": (" << arestas[i].origem << ", " << arestas[i].destino << ")" << std::endl;
+    // Extrai as arestas
+    std::vector<std::vector<Aresta>> arestas;
+    arestas.resize(nvertices);
+    for(unsigned int i=0; i < vertices.size(); i++){
+        for(int j=0; j < vertices[i].grau; j++){
+            arestas[i].push_back(vertices[i].vizinhos[j]);
+        }
     }
 
+    // Imprime as arestas
+    for(unsigned int i=0; i < arestas.size(); i++){
+        std::cout << "Arestas do vertice " << i + 1 << ": ";
+        for(unsigned int j=0; j < arestas[i].size(); j++){
+            std::cout << arestas[i][j].destino << " ";
+        }
+        std::cout << std::endl;
+    }
     
-    // Encontra as faces - Ainda não funciona
-    //encontraFaces();
+    // Encontra as faces
+    encontraFaces(arestas, 1);
 
     return 0;
 }

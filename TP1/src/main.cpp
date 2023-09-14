@@ -66,9 +66,19 @@ std::vector<std::vector<unsigned int>> EncontraFaces(std::vector<Vertice> vertic
         visitados[i].assign(vertices[i].grau, false);
 
         // Ordena os vizinhos de cada vértice
-        std::sort(adjacentes[i].begin(), adjacentes[i].end(), [&](int a, int b){
-            return Compara(i, a, b, vertices);
-        });
+        
+        //std::sort(adjacentes[i].begin(), adjacentes[i].end(), [&](int a, int b){
+        //    return Compara(i, a, b, vertices);
+        //});                                          Muito tempo de execução
+
+        auto compara = [&](int a, int b){
+            Ponto p = vertices[a].cord - vertices[i].cord;
+            Ponto q = vertices[b].cord - vertices[i].cord;
+            if(p.PosicaoPlano() != q.PosicaoPlano()) return p.PosicaoPlano() < q.PosicaoPlano();
+            return p.ProdutoVetorial(q) > 0;
+        };
+        std::sort(adjacentes[i].begin(), adjacentes[i].end(), compara);
+
     }
 
     // Percorre os vértices
@@ -89,8 +99,16 @@ std::vector<std::vector<unsigned int>> EncontraFaces(std::vector<Vertice> vertic
 
                 int aux = adjacentes[vertice_atual][aresta_atual];
                 // Encontra a próxima aresta
+
+                //unsigned int proximo = std::lower_bound(adjacentes[aux].begin(), adjacentes[aux].end(), vertice_atual, [&](int a, int b){
+                //    return Compara(aux, a, b, vertices);
+                //}) - adjacentes[aux].begin() + 1;         Muito tempo de execução
+
                 unsigned int proximo = std::lower_bound(adjacentes[aux].begin(), adjacentes[aux].end(), vertice_atual, [&](int a, int b){
-                    return Compara(aux, a, b, vertices);
+                    Ponto p = vertices[a].cord - vertices[aux].cord;
+                    Ponto q = vertices[b].cord - vertices[aux].cord;
+                    if(p.PosicaoPlano() != q.PosicaoPlano()) return p.PosicaoPlano() < q.PosicaoPlano();
+                    return p.ProdutoVetorial(q) > 0;
                 }) - adjacentes[aux].begin() + 1;
 
                 // Se o próximo for igual ao tamanho do vetor encontramos a face

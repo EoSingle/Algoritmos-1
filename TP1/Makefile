@@ -6,7 +6,7 @@ BIN_DIR      = ./bin
 SRC_DIR      = ./src
 INCLUDE_DIR  = ./include
 OBJ_DIR      = ./obj
-ARGS		 = ./test/input.txt
+ARGS		 = ./test/input2.txt
 
 all: ${BIN_DIR}/${TARGET}
 

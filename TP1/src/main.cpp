@@ -9,24 +9,6 @@
 // Estrutura Ponto
 struct Ponto{
     float x,y;
-
-    Ponto(float _x, float _y) : x(_x), y(_y) {}
-
-    Ponto operator - (const Ponto& p) const{
-        return Ponto(this->x - p.x, this->y - p.y);
-    }
-
-    int ProdutoVetorial(const Ponto& p) const{
-        return this->x * p.y - this->y * p.x;
-    }
-
-    int ProdutoVetorial(const Ponto& a, const Ponto& b) const{
-        return (a - *this).ProdutoVetorial(b - *this);
-    }
-
-    int PosicaoPlano () const{
-        return (this->y < 0 || (this->y == 0 && this->x < 0));
-    }
 };
 
 // Estrutura que representa um Vértice
@@ -34,48 +16,20 @@ struct Vertice{
     Ponto cord; 
     int grau;
     std::vector<unsigned int> vizinhos;
-
-    Vertice(Ponto _cord, int _grau) : cord(_cord), grau(_grau) {}
-    Vertice() : cord(Ponto(0,0)), grau(0) {}
 };
 
-// Função de comparação para ordenar os vertices
-bool Compara(int base, int a, int b, std::vector<Vertice>& vertices){
-    Ponto p = vertices[a].cord - vertices[base].cord;
-    Ponto q = vertices[b].cord - vertices[base].cord;
-    if(p.PosicaoPlano() != q.PosicaoPlano()) return p.PosicaoPlano() < q.PosicaoPlano();
-    return p.ProdutoVetorial(q) > 0;
-}
-
+// Calcula a distância entre dois pontos
 double Distancia(Ponto a, Ponto b){
     double x = (a.x - b.x), y = (a.y - b.y);
     return sqrt(x*x + y*y);
 }
 
-int TipoCurva(Ponto base, Ponto a, Ponto b){
-    double v = base.x*(a.y-b.y)+a.x*(b.y-base.y)+b.x*(base.y-a.y);
-    if (v < 0) return -1;// esquerda
-    if (v > 0) return +1; // direita
-    return 0; // em frente
-}
-
-bool ComparaCurva(int base, int a, int b, std::vector<Vertice>& vertices){
-    Ponto ponto_base = vertices[base].cord,
-    ponto_a = vertices[a].cord,
-    ponto_b = vertices[b].cord;
-
-    int tipo = TipoCurva(ponto_base, ponto_a, ponto_b);
-
-    if(tipo == 0) 
-        return (Distancia(ponto_base, ponto_a) <= Distancia(ponto_base, ponto_b))? 0:1;
-
-    return (tipo == 1)? 1:0; 
-}
-
+// Calcula a inclinação relativa entre dois pontos
 double InclinacaoRelativa(Ponto central, Ponto vizinho) {
     return atan2(vizinho.y - central.y, vizinho.x - central.x);
 }
 
+// Compara os ângulos entre os pontos
 bool ComparaAngulo(int i_base, int i_a, int i_b, std::vector<Vertice>& vertices){
     Ponto base = vertices[i_base].cord,
     a = vertices[i_a].cord, 
@@ -100,19 +54,9 @@ std::vector<std::vector<unsigned int>> EncontraFaces(std::vector<Vertice> vertic
         visitados[i].assign(vertices[i].grau, false);
 
         // Ordena os vizinhos de cada vértice
-        
         std::sort(adjacentes[i].begin(), adjacentes[i].end(), [&](int a, int b){
             return ComparaAngulo(i, a, b, vertices);
         });
-
-        /*auto compara = [&](int a, int b){
-            Ponto p = vertices[a].cord - vertices[i].cord;
-            Ponto q = vertices[b].cord - vertices[i].cord;
-            if(p.PosicaoPlano() != q.PosicaoPlano()) return p.PosicaoPlano() < q.PosicaoPlano();
-            return p.ProdutoVetorial(q) > 0;
-        };
-        std::sort(adjacentes[i].begin(), adjacentes[i].end(), compara);*/
-
     }
 
     // Percorre os vértices
@@ -122,6 +66,7 @@ std::vector<std::vector<unsigned int>> EncontraFaces(std::vector<Vertice> vertic
             // Se a aresta já foi visitada, pula
             if(visitados[i][j]) continue;
 
+            // Vetor que representa a face
             std::vector<unsigned int> face;
             int vertice_atual = i, aresta_atual = j;
 
@@ -133,17 +78,9 @@ std::vector<std::vector<unsigned int>> EncontraFaces(std::vector<Vertice> vertic
 
                 int aux = adjacentes[vertice_atual][aresta_atual];
                 // Encontra a próxima aresta
-
                 unsigned int proximo = std::lower_bound(adjacentes[aux].begin(), adjacentes[aux].end(), vertice_atual, [&](int a, int b){
                     return ComparaAngulo(aux, a, b, vertices);
                 }) - adjacentes[aux].begin() + 1;         
-
-                /*unsigned int proximo = std::lower_bound(adjacentes[aux].begin(), adjacentes[aux].end(), vertice_atual, [&](int a, int b){
-                    Ponto p = vertices[a].cord - vertices[aux].cord;
-                    Ponto q = vertices[b].cord - vertices[aux].cord;
-                    if(p.PosicaoPlano() != q.PosicaoPlano()) return p.PosicaoPlano() < q.PosicaoPlano();
-                    return p.ProdutoVetorial(q) > 0;
-                }) - adjacentes[aux].begin() + 1;*/
 
                 // Se o próximo for igual ao tamanho do vetor encontramos a face
                 if(proximo == adjacentes[aux].size()) proximo = 0;

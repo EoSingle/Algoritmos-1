@@ -5,6 +5,9 @@
 #include <vector>
 #include <cmath>
 #include <bitset>
+#include <unordered_set>
+#include <functional>
+
 
 #define MAX_SECTIONS 100
 #define MAX_MANEUVERS 10
@@ -45,6 +48,20 @@ class Maneuver{
             return (this->points == other.points) && (this->time == other.time);
         }
 };
+
+namespace std {
+    template <>
+    struct hash<Maneuver> {
+        std::size_t operator()(const Maneuver& maneuver) const {
+            // Use combinações dos hashes dos atributos points e time para calcular o hash.
+            std::size_t hashPoints = std::hash<int>{}(maneuver.getPoints());
+            std::size_t hashTime = std::hash<int>{}(maneuver.getTime());
+
+            // Combinação dos hashes usando operações bit a bit.
+            return hashPoints ^ (hashTime + 0x9e3779b9 + (hashPoints << 6) + (hashPoints >> 2));
+        }
+    };
+}
 
 // Classe que representa uma combinação de manobras
 class Combination{
@@ -94,11 +111,17 @@ class Solver{
         // Número de seções e manobras
         int nsections, nmaneuvers;
 
+        // Memoização
+        std::vector<std::vector<std::vector<int>>> memoization;
+
+
     public:
         // Construtores
-        Solver(const std::vector<Section> &_sections, const std::vector<Maneuver> &_maneuvers) : sections(_sections), maneuvers(_maneuvers) {
+        Solver(const std::vector<Section> &_sections, const std::vector<Maneuver> &_maneuvers) 
+        : sections(_sections), maneuvers(_maneuvers) {
             this->nsections = sections.size();
             this->nmaneuvers = maneuvers.size();
+
         }
 
         // Gera todas as combinações de manobras
@@ -129,7 +152,42 @@ class Solver{
             std::cout << std::endl;
         }
 
-        // Calcula a pontuação de uma combinação dado a seção anterior
+        // Imprime as combinações de manobras que geram a pontuação máxima
+        // Para cada seção, imprime o tamanho e a combinação que gerou a pontuação máxima
+        void printCombinationsMaxScore(){
+            for(int i=0; i < nsections; i++){
+                int maxScore = 0;
+                int maxCombination = 0;
+                for(long unsigned int j = 0; j < combinations.size(); j++){
+                    if(memoization[i][j][0] > maxScore){
+                        maxScore = memoization[i][j][0];
+                        maxCombination = j;
+                    }
+                }
+                std::cout << combinations[maxCombination].getManeuvers().size() << " ";
+                
+                // Encontra os índices em maneuvers que correspondem às manobras da combinação
+                std::vector<int> maneuversIndexes;
+                for (const auto& maneuver : combinations[maxCombination].getManeuvers()) {
+                    for (long unsigned int j = 0; j < maneuvers.size(); ++j) {
+                        if (maneuver == maneuvers[j]) {
+                            maneuversIndexes.push_back(j);
+                            break;
+                        }
+                    }
+                }
+
+                // Imprime os índices das manobras - offset de 1 para imprimir os índices começando em 1
+                for (long unsigned int j = 0; j < maneuversIndexes.size(); ++j) {
+                    std::cout << maneuversIndexes[j] + 1 << " ";
+                }
+
+                std::cout << std::endl;
+                
+            }
+        }
+
+        // Calcula a pontuação de uma combinação dado a seção anterior - Versão 1
         int points(Combination Current, Combination Previous){
             int score = 0;
             for(long unsigned int i = 0; i < Current.getManeuvers().size(); i++){
@@ -145,51 +203,136 @@ class Solver{
             return score;
         }
 
-        /* 
-        Calcula a pontuação máxima
-        F(i, m) = max[m' in M]{F(i+1, m') + pontos(m'|m) * bonus(i)}
-        M:         conjunto de manobras
-        m' in M:   uma combinação de manobras
-        i =        índice da seção
-        pontos(m'|m): pontos da manobra de m' dado m na seção i - 1
-        bonus(i):  bônus da seção i
-        */
+        // Calcula a pontuação de uma combinação dado a seção anterior - Versão 2
+        int points2(const Combination& Current, const Combination& Previous) {
+            int score = 0;
+
+            // Criar um conjunto para armazenar as manobras anteriores para verificação de existência.
+            std::unordered_set<Maneuver> previousManeuversSet;
+            for (const auto& maneuver : Previous.getManeuvers()) {
+                previousManeuversSet.insert(maneuver);
+            }
+
+            // Iterar sobre as manobras atuais e calcular a pontuação.
+            for (const auto& currentManeuver : Current.getManeuvers()) {
+                bool found = previousManeuversSet.find(currentManeuver) != previousManeuversSet.end();
+                score += (found ? static_cast<int>(std::floor(currentManeuver.getPoints() * 0.5)) : currentManeuver.getPoints());
+            }
+
+            return score;
+        }
+ 
+        // Calcula a pontuação máxima - Versão Recursiva
         int calculateMaxScore(int section = -1, int combination = 0, int lastcombination = 0){
+            //std::cout << "F(" << section << ", " << combination << ", " << lastcombination << ")" << std::endl;
+            // Verifica se a combinação já foi calculada
+            if(section != -1){
+                if(this->memoization[section][combination][lastcombination] != -1){
+                    std::cout << "F(" << section << ", " << combination << ", " << lastcombination << ") = " << this->memoization[section][combination][lastcombination] << std::endl;
+                    return this->memoization[section][combination][lastcombination];
+                }
+            }
+
             // Se chegou na última seção
             if(section == this->nsections){
+                this->memoization[section][combination][lastcombination] = 0;
                 return 0;
             }
 
             // Combinação ultrapassa o tempo da seção
             if(this->combinations[combination].getTime() > this->sections[section].getTime()){
+                this->memoization[section][combination][lastcombination] = 0;
                 return 0;
             }
 
-            // Recursão /!\ Logical Error
+            // Recursão
             int maxScore = 0;
             for(unsigned int i = 0; i < this->combinations.size(); i++){
                 int score = calculateMaxScore(section + 1, i, combination);
-                score += points(this->combinations[i], this->combinations[lastcombination]) * this->sections[section].getBonus();
+                score += points2(this->combinations[combination], this->combinations[lastcombination]) * this->sections[section].getBonus() * this->combinations[combination].getManeuvers().size();
                 if(score > maxScore){
                     maxScore = score;
                 }
             }
 
+            // Memoização
+            if(section != -1) this->memoization[section][combination][lastcombination] = maxScore;
+            
             return maxScore;
         }
 
+        // Calcula a pontuação máxima - Versão Iterativa
+        int calculateMaxScore2() {
+            memoization.resize(nsections + 1,
+                            std::vector<std::vector<int>>(nmaneuvers, std::vector<int>(nmaneuvers, -1)));
+
+            // Casos bases
+            for (long unsigned int section = 0; section <= sections.size(); ++section) {
+                for (long unsigned int combination = 0; combination < combinations.size(); ++combination) {
+                    for (long unsigned int lastcombination = 0; lastcombination < combinations.size(); ++lastcombination) {
+                        if (combinations[combination].getTime() > sections[section].getTime()) {
+                            memoization[section][combination][lastcombination] = 0;
+                        } else if (section == sections.size() ) {
+                            memoization[section][combination][lastcombination] = 0;
+                        }
+                    }
+                }
+            }
+
+            // Preenchimento da tabela de memoização de baixo para cima
+            for (int section = nsections - 1; section >= 0; --section) {
+                for (long unsigned int combination = 0; combination < this->combinations.size(); ++combination) {
+                    for (long unsigned int lastcombination = 0; lastcombination < this->combinations.size(); ++lastcombination){
+                        if (combinations[combination].getTime() > sections[section].getTime()) {
+                            memoization[section][combination][lastcombination] = 0;
+                        }
+                        else {
+                            int maxScore = 0;
+                            // Percorre as combinações possíveis na próxima seção
+                            for (long unsigned int i = 0; i < this->combinations.size(); ++i){
+                                int score = memoization[section + 1][i][combination] + points2(combinations[combination], combinations[lastcombination]) * sections[section].getBonus() * combinations[combination].getManeuvers().size();
+
+                                if (score > maxScore) {
+                                    maxScore = score;
+                                }
+                            }
+                            memoization[section][combination][lastcombination] = maxScore;
+                        }
+                    }
+                }
+            }
+
+            // O resultado final é o maior valor da primeira seção
+            int maxScore = 0;
+            for (long unsigned int combination = 0; combination < this->combinations.size(); ++combination) {
+                for (long unsigned int lastcombination = 0; lastcombination < this->combinations.size(); ++lastcombination) {
+                    maxScore = std::max(maxScore, memoization[0][combination][lastcombination]);
+                }
+            }
+
+            return maxScore;
+            
+        }
+
         // Resolve o problema
-        int solve(){
+        void solve(){
             // Pre-calcula as combinações de manobras
             generateCombinatios();
 
-            // Imprime a memoização
-            printCombinations();
+            // Imprime as combinações de manobras
+            //printCombinations();
+
+            // Inicializa a memoização
+            this->memoization = std::vector<std::vector<std::vector<int>>>(this->nsections + 1, std::vector<std::vector<int>>(this->combinations.size(), std::vector<int>(this->combinations.size(), -1)));
 
             // Calcula a pontuação máxima
-            int score = calculateMaxScore();
+            int score = calculateMaxScore2();
 
-            return score;
+            // Imprime a pontuação máxima
+            std::cout << score << std::endl;
+
+            // Imprime as combinações de manobras que geram a pontuação máxima
+            printCombinationsMaxScore();
         }
 };
 
@@ -236,15 +379,13 @@ int main(int argc, char *argv[]) {
     }
 
     // Imprime as seções e manobras
-    print(sections, maneuvers);
+    //print(sections, maneuvers);
 
     // Instancia o solver
     Solver solver(sections, maneuvers);
 
-    // Pontuação Total Máxima
-    int maxScore = solver.solve();
-
-    std::cout << "Pontuação Total Máxima: " << maxScore << std::endl;
+    // Resolve o problema
+    solver.solve();
 
     return 0;
 }

@@ -263,16 +263,20 @@ class Solver{
 
         // Calcula a pontuação máxima - Versão Iterativa
         int calculateMaxScore2() {
+            // variaveis auxiliares
+            long unsigned int ncombinations = this->combinations.size();
+            long unsigned int nsections = this->sections.size();
+
             memoization.resize(nsections + 1,
                             std::vector<std::vector<int>>(nmaneuvers, std::vector<int>(nmaneuvers, -1)));
 
-            // Casos bases
-            for (long unsigned int section = 0; section <= sections.size(); ++section) {
-                for (long unsigned int combination = 0; combination < combinations.size(); ++combination) {
-                    for (long unsigned int lastcombination = 0; lastcombination < combinations.size(); ++lastcombination) {
+            // Casos bases - Talvez somente adicionar 0's na ultima sessão? O(n*m²) > O(n)
+            for (long unsigned int section = 0; section <= nsections; ++section) {
+                for (long unsigned int combination = 0; combination < ncombinations; ++combination) {
+                    for (long unsigned int lastcombination = 0; lastcombination < ncombinations; ++lastcombination) {
                         if (combinations[combination].getTime() > sections[section].getTime()) {
                             memoization[section][combination][lastcombination] = 0;
-                        } else if (section == sections.size() ) {
+                        } else if (section == nsections) {
                             memoization[section][combination][lastcombination] = 0;
                         }
                     }
@@ -285,19 +289,19 @@ class Solver{
                     for (long unsigned int lastcombination = 0; lastcombination < this->combinations.size(); ++lastcombination){
                         if (combinations[combination].getTime() > sections[section].getTime()) {
                             memoization[section][combination][lastcombination] = 0;
+                            continue;
                         }
-                        else {
-                            int maxScore = 0;
-                            // Percorre as combinações possíveis na próxima seção
-                            for (long unsigned int i = 0; i < this->combinations.size(); ++i){
-                                int score = memoization[section + 1][i][combination] + points2(combinations[combination], combinations[lastcombination]) * sections[section].getBonus() * combinations[combination].getManeuvers().size();
+                        
+                        int maxScore = 0;
+                        int points = points2(combinations[combination], combinations[lastcombination]) * sections[section].getBonus() * combinations[combination].getManeuvers().size();
 
-                                if (score > maxScore) {
-                                    maxScore = score;
-                                }
-                            }
-                            memoization[section][combination][lastcombination] = maxScore;
+                        // Percorre as combinações possíveis na próxima seção
+                        for (long unsigned int i = 0; i < this->combinations.size(); ++i){
+                            int score = memoization[section + 1][i][combination] + points;
+
+                            if (score > maxScore) maxScore = score;
                         }
+                        memoization[section][combination][lastcombination] = maxScore;
                     }
                 }
             }
